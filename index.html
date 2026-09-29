@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="theme-color" content="#05070a">
+  <title>STARK — Finance Control</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="arc">S</div>
+    <div>
+      <div class="brand-title">STARK</div>
+      <div class="brand-sub">FINANCE CONTROL</div>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="btn ghost" onclick="printReport()">⎙ Imprimer / PDF</button>
+    <button class="btn" onclick="resetData()">Réinitialiser</button>
+  </div>
+</header>
+
+<main class="shell">
+  <nav class="tabs">
+    <button class="tab active" data-tab="dashboard">Tableau de bord</button>
+    <button class="tab" data-tab="budget">Budget</button>
+    <button class="tab" data-tab="schedules">Prélèvements & échéanciers</button>
+    <button class="tab" data-tab="debts">Suivi de dette</button>
+  </nav>
+
+  <section id="dashboard" class="page active">
+    <div class="hero">
+      <div>
+        <div class="eyebrow">CONTRÔLE FINANCIER</div>
+        <h1>Vue d'ensemble</h1>
+        <p>Modifie tes données directement dans l'application. Les calculs sont automatiques et enregistrés sur ton appareil.</p>
+      </div>
+      <div class="month-box">
+        <label>Mois affiché</label>
+        <input id="monthPicker" type="month">
+      </div>
+    </div>
+
+    <div class="cards" id="dashboardCards"></div>
+
+    <div class="grid-2">
+      <article class="panel">
+        <div class="panel-head"><h2>Objectif d'épargne</h2><span id="goalLabel">0 €</span></div>
+        <div class="progress"><div id="goalProgress"></div></div>
+        <div class="stats-line"><span>Objectif</span><strong id="goalValue">0 €</strong></div>
+        <div class="stats-line"><span>Reste à épargner</span><strong id="goalRemaining">0 €</strong></div>
+        <button class="btn small" onclick="editGoal()">Modifier l'objectif</button>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><h2>Alertes</h2><span class="status-dot"></span></div>
+        <div id="alerts" class="alerts"></div>
+      </article>
+    </div>
+
+    <article class="panel note">
+      <strong>Important :</strong> les prélèvements récurrents et mensualités de dettes sont comptés en plus du budget classique.
+      Évite donc de saisir deux fois une même dépense dans « Budget » et « Prélèvements ».
+    </article>
+  </section>
+
+  <section id="budget" class="page">
+    <div class="section-head">
+      <div><div class="eyebrow">MODULE 01</div><h1>Budget mensuel</h1></div>
+      <button class="btn" onclick="openExpenseModal()">+ Ajouter une dépense</button>
+    </div>
+
+    <div class="cards" id="budgetCards"></div>
+
+    <div class="grid-2">
+      <article class="panel">
+        <div class="panel-head"><h2>Revenus</h2><button class="icon-btn" onclick="openIncomeModal()">＋</button></div>
+        <div id="incomeList" class="list"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Dépenses</h2><button class="icon-btn" onclick="openExpenseModal()">＋</button></div>
+        <div id="expenseList" class="list"></div>
+      </article>
+    </div>
+  </section>
+
+  <section id="schedules" class="page">
+    <div class="section-head">
+      <div><div class="eyebrow">MODULE 02</div><h1>Prélèvements & échéanciers</h1></div>
+      <button class="btn" onclick="openScheduleModal()">+ Ajouter</button>
+    </div>
+    <div class="cards" id="scheduleCards"></div>
+    <article class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nom</th><th>Montant</th><th>Fréquence</th><th>Jour</th><th>Catégorie</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody id="scheduleTable"></tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <section id="debts" class="page">
+    <div class="section-head">
+      <div><div class="eyebrow">MODULE 03</div><h1>Suivi de dette</h1></div>
+      <button class="btn" onclick="openDebtModal()">+ Ajouter une dette</button>
+    </div>
+    <div class="cards" id="debtCards"></div>
+    <article class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dette</th><th>Total initial</th><th>Restant</th><th>Mensualité</th><th>Progression</th><th>Échéance</th><th>Actions</th></tr></thead>
+          <tbody id="debtTable"></tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+</main>
+
+<div id="modalRoot" class="modal-root"></div>
+
+<footer>STARK FINANCE CONTROL • Données stockées localement sur cet appareil</footer>
+<script>
+const DEFAULT_DATA = {"income": [{"id": 1, "label": "Salaire", "amount": 900}], "expenses": [{"id": 2, "label": "Logement", "category": "Logement", "amount": 218}, {"id": 3, "label": "Carburant", "category": "Transport", "amount": 120}, {"id": 4, "label": "Téléphone", "category": "Abonnements", "amount": 33}, {"id": 5, "label": "Internet", "category": "Abonnements", "amount": 35}, {"id": 6, "label": "Courses", "category": "Vie courante", "amount": 150}, {"id": 7, "label": "Assurance voiture", "category": "Transport", "amount": 59}], "schedules": [], "debts": [], "savingsGoal": 1750};
+let data = loadData();
+let editing = null;
+
+function loadData(){
+  try {
+    const saved = localStorage.getItem("starkFinanceControl");
+    return saved ? JSON.parse(saved) : structuredClone(DEFAULT_DATA);
+  } catch(e){ return structuredClone(DEFAULT_DATA); }
+}
+function save(){
+  localStorage.setItem("starkFinanceControl", JSON.stringify(data));
+  renderAll();
+}
+function uid(){ return Date.now() + Math.floor(Math.random()*1000); }
+function euro(n){ return new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(Number(n)||0); }
+function monthlyAmount(item){
+  const amount = Number(item.amount)||0;
+  if(item.frequency==="Hebdomadaire") return amount*52/12;
+  if(item.frequency==="Trimestriel") return amount/3;
+  if(item.frequency==="Semestriel") return amount/6;
+  if(item.frequency==="Annuel") return amount/12;
+  return amount;
+}
+function totalIncome(){ return data.income.reduce((s,x)=>s+Number(x.amount||0),0); }
+function totalExpenses(){ return data.expenses.reduce((s,x)=>s+Number(x.amount||0),0); }
+function totalSchedules(){ return data.schedules.filter(x=>x.active!==false).reduce((s,x)=>s+monthlyAmount(x),0); }
+function totalDebtPayments(){ return data.debts.filter(x=>Number(x.remaining)>0).reduce((s,x)=>s+Number(x.monthly||0),0); }
+function available(){
+  return totalIncome()-totalExpenses()-totalSchedules()-totalDebtPayments();
+}
+function esc(v){
+  return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+}
+
+document.querySelectorAll(".tab").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+  });
+});
+
+function renderAll(){
+  renderDashboard(); renderBudget(); renderSchedules(); renderDebts();
+}
+function card(title,value,sub="",tone=""){
+  return `<div class="metric ${tone}"><div class="metric-title">${title}</div><div class="metric-value">${value}</div><div class="metric-sub">${sub}</div></div>`;
+}
+function renderDashboard(){
+  const inc=totalIncome(), exp=totalExpenses(), sch=totalSchedules(), debt=totalDebtPayments(), av=available();
+  document.getElementById("dashboardCards").innerHTML =
+    card("Revenus",euro(inc),"mensuel")+
+    card("Dépenses",euro(exp),"budget de base","warn")+
+    card("Prélèvements",euro(sch),"équivalent mensuel","warn")+
+    card("Mensualités dettes",euro(debt),"à payer","warn")+
+    card("Disponible réel",euro(av),"après tous les éléments",av<0?"danger":"good");
+
+  const goal=Number(data.savingsGoal)||0;
+  const saved=Math.max(0,av);
+  const pct=goal?Math.min(100,(saved/goal)*100):0;
+  document.getElementById("goalLabel").textContent=euro(saved);
+  document.getElementById("goalValue").textContent=euro(goal);
+  document.getElementById("goalRemaining").textContent=euro(Math.max(0,goal-saved));
+  document.getElementById("goalProgress").style.width=pct+"%";
+
+  const alerts=[];
+  if(av<0) alerts.push(`<div class="alert danger">⚠️ Budget négatif de ${euro(Math.abs(av))}.</div>`);
+  if(av>=0 && av<100) alerts.push(`<div class="alert warn">⚠️ Marge mensuelle faible : ${euro(av)}.</div>`);
+  if(data.debts.some(x=>Number(x.remaining)>0)) alerts.push(`<div class="alert">💳 ${data.debts.filter(x=>Number(x.remaining)>0).length} dette(s) en cours.</div>`);
+  if(!alerts.length) alerts.push(`<div class="alert good">✓ Aucun signal critique détecté.</div>`);
+  document.getElementById("alerts").innerHTML=alerts.join("");
+}
+function renderBudget(){
+  document.getElementById("budgetCards").innerHTML =
+    card("Revenus",euro(totalIncome()),"total")+
+    card("Dépenses",euro(totalExpenses()),"total","warn")+
+    card("Reste budget",euro(totalIncome()-totalExpenses()),"avant prélèvements et dettes");
+  document.getElementById("incomeList").innerHTML = data.income.length ? data.income.map(x=>`
+    <div class="row"><div><strong>${esc(x.label)}</strong><small>${euro(x.amount)}</small></div>
+    <div><button class="mini" onclick="editIncome(${x.id})">Modifier</button><button class="mini danger-btn" onclick="deleteIncome(${x.id})">Suppr.</button></div></div>`).join("") : `<div class="empty">Aucun revenu.</div>`;
+  document.getElementById("expenseList").innerHTML = data.expenses.length ? data.expenses.map(x=>`
+    <div class="row"><div><strong>${esc(x.label)}</strong><small>${esc(x.category||"Autre")} • ${euro(x.amount)}</small></div>
+    <div><button class="mini" onclick="editExpense(${x.id})">Modifier</button><button class="mini danger-btn" onclick="deleteExpense(${x.id})">Suppr.</button></div></div>`).join("") : `<div class="empty">Aucune dépense.</div>`;
+}
+function renderSchedules(){
+  const active=data.schedules.filter(x=>x.active!==false);
+  document.getElementById("scheduleCards").innerHTML =
+    card("Prélèvements actifs",active.length,"")+
+    card("Total mensuel",euro(totalSchedules()),"équivalent","warn");
+  document.getElementById("scheduleTable").innerHTML = data.schedules.length ? data.schedules.map(x=>`
+    <tr><td><strong>${esc(x.name)}</strong></td><td>${euro(x.amount)}</td><td>${esc(x.frequency)}</td><td>${esc(x.day||"—")}</td><td>${esc(x.category||"Autre")}</td>
+    <td><span class="pill ${x.active!==false?"on":"off"}">${x.active!==false?"ACTIF":"PAUSE"}</span></td>
+    <td><button class="mini" onclick="editSchedule(${x.id})">Modifier</button>
+    <button class="mini" onclick="toggleSchedule(${x.id})">${x.active!==false?"Pause":"Activer"}</button>
+    <button class="mini danger-btn" onclick="deleteSchedule(${x.id})">Suppr.</button></td></tr>`).join("") :
+    `<tr><td colspan="7" class="empty">Aucun prélèvement ou échéancier enregistré.</td></tr>`;
+}
+function renderDebts(){
+  const remaining=data.debts.reduce((s,x)=>s+Number(x.remaining||0),0);
+  const monthly=totalDebtPayments();
+  document.getElementById("debtCards").innerHTML =
+    card("Dettes en cours",data.debts.filter(x=>Number(x.remaining)>0).length,"")+
+    card("Capital restant",euro(remaining),"total à rembourser","warn")+
+    card("Mensualités",euro(monthly),"par mois","warn");
+  document.getElementById("debtTable").innerHTML = data.debts.length ? data.debts.map(x=>{
+    const total=Number(x.initial)||0, rem=Number(x.remaining)||0;
+    const pct=total?Math.min(100,Math.max(0,((total-rem)/total)*100)):0;
+    return `<tr><td><strong>${esc(x.name)}</strong></td><td>${euro(total)}</td><td>${euro(rem)}</td><td>${euro(x.monthly)}</td>
+      <td><div class="mini-progress"><span style="width:${pct}%"></span></div><small>${pct.toFixed(0)} %</small></td>
+      <td>${esc(x.due||"—")}</td><td><button class="mini" onclick="editDebt(${x.id})">Modifier</button>
+      <button class="mini danger-btn" onclick="deleteDebt(${x.id})">Suppr.</button></td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="empty">Aucune dette enregistrée.</td></tr>`;
+}
+
+function modal(title,body){
+  document.getElementById("modalRoot").innerHTML=`<div class="modal-backdrop" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head"><h2>${title}</h2><button class="close" onclick="closeModal()">×</button></div>${body}</div></div>`;
+}
+function closeModal(e){ if(!e || e.target.classList.contains("modal-backdrop")) document.getElementById("modalRoot").innerHTML=""; }
+function formInput(label,id,value,type="text",extra=""){ return `<label>${label}<input id="${id}" type="${type}" value="${esc(value)}" ${extra}></label>`; }
+
+function openIncomeModal(item=null){
+  editing=item?.id||null;
+  modal(item?"Modifier le revenu":"Ajouter un revenu",`<div class="form-grid">
+    ${formInput("Nom","fLabel",item?.label||"")}
+    ${formInput("Montant (€)","fAmount",item?.amount||"","number",'step="0.01" min="0"')}
+  </div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Annuler</button><button class="btn" onclick="saveIncome()">Enregistrer</button></div>`);
+}
+function saveIncome(){
+  const obj={id:editing||uid(),label:document.getElementById("fLabel").value.trim()||"Revenu",amount:Number(document.getElementById("fAmount").value)||0};
+  if(editing) data.income=data.income.map(x=>x.id===editing?obj:x); else data.income.push(obj);
+  closeModal(); save();
+}
+function editIncome(id){ openIncomeModal(data.income.find(x=>x.id===id)); }
+function deleteIncome(id){ if(confirm("Supprimer ce revenu ?")){data.income=data.income.filter(x=>x.id!==id);save();} }
+
+function openExpenseModal(item=null){
+  editing=item?.id||null;
+  modal(item?"Modifier la dépense":"Ajouter une dépense",`<div class="form-grid">
+    ${formInput("Nom","fLabel",item?.label||"")}
+    ${formInput("Catégorie","fCategory",item?.category||"")}
+    ${formInput("Montant (€)","fAmount",item?.amount||"","number",'step="0.01" min="0"')}
+  </div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Annuler</button><button class="btn" onclick="saveExpense()">Enregistrer</button></div>`);
+}
+function saveExpense(){
+  const obj={id:editing||uid(),label:document.getElementById("fLabel").value.trim()||"Dépense",category:document.getElementById("fCategory").value.trim()||"Autre",amount:Number(document.getElementById("fAmount").value)||0};
+  if(editing) data.expenses=data.expenses.map(x=>x.id===editing?obj:x); else data.expenses.push(obj);
+  closeModal(); save();
+}
+function editExpense(id){ openExpenseModal(data.expenses.find(x=>x.id===id)); }
+function deleteExpense(id){ if(confirm("Supprimer cette dépense ?")){data.expenses=data.expenses.filter(x=>x.id!==id);save();} }
+
+function openScheduleModal(item=null){
+  editing=item?.id||null;
+  modal(item?"Modifier le prélèvement":"Ajouter un prélèvement / échéancier",`<div class="form-grid">
+    ${formInput("Nom","fName",item?.name||"")}
+    ${formInput("Montant","fAmount",item?.amount||"","number",'step="0.01" min="0"')}
+    <label>Fréquence<select id="fFrequency">
+      ${["Mensuel","Hebdomadaire","Trimestriel","Semestriel","Annuel"].map(v=>`<option ${item?.frequency===v?"selected":""}>${v}</option>`).join("")}
+    </select></label>
+    ${formInput("Jour de prélèvement","fDay",item?.day||"")}
+    ${formInput("Catégorie","fCategory",item?.category||"")}
+  </div>
+  <label class="check"><input id="fActive" type="checkbox" ${item?.active!==false?"checked":""}> Prélèvement actif</label>
+  <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Annuler</button><button class="btn" onclick="saveSchedule()">Enregistrer</button></div>`);
+}
+function saveSchedule(){
+  const obj={id:editing||uid(),name:document.getElementById("fName").value.trim()||"Prélèvement",amount:Number(document.getElementById("fAmount").value)||0,
+    frequency:document.getElementById("fFrequency").value,day:document.getElementById("fDay").value.trim(),category:document.getElementById("fCategory").value.trim()||"Autre",active:document.getElementById("fActive").checked};
+  if(editing) data.schedules=data.schedules.map(x=>x.id===editing?obj:x); else data.schedules.push(obj);
+  closeModal(); save();
+}
+function editSchedule(id){openScheduleModal(data.schedules.find(x=>x.id===id));}
+function toggleSchedule(id){data.schedules=data.schedules.map(x=>x.id===id?{...x,active:x.active===false}:x);save();}
+function deleteSchedule(id){if(confirm("Supprimer ce prélèvement ?")){data.schedules=data.schedules.filter(x=>x.id!==id);save();}}
+
+function openDebtModal(item=null){
+  editing=item?.id||null;
+  modal(item?"Modifier la dette":"Ajouter une dette",`<div class="form-grid">
+    ${formInput("Nom de la dette","fName",item?.name||"")}
+    ${formInput("Montant initial (€)","fInitial",item?.initial||"","number",'step="0.01" min="0"')}
+    ${formInput("Capital restant (€)","fRemaining",item?.remaining||"","number",'step="0.01" min="0"')}
+    ${formInput("Mensualité (€)","fMonthly",item?.monthly||"","number",'step="0.01" min="0"')}
+    ${formInput("Prochaine échéance","fDue",item?.due||"","date")}
+  </div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Annuler</button><button class="btn" onclick="saveDebt()">Enregistrer</button></div>`);
+}
+function saveDebt(){
+  const obj={id:editing||uid(),name:document.getElementById("fName").value.trim()||"Dette",initial:Number(document.getElementById("fInitial").value)||0,
+    remaining:Number(document.getElementById("fRemaining").value)||0,monthly:Number(document.getElementById("fMonthly").value)||0,due:document.getElementById("fDue").value};
+  if(editing) data.debts=data.debts.map(x=>x.id===editing?obj:x); else data.debts.push(obj);
+  closeModal(); save();
+}
+function editDebt(id){openDebtModal(data.debts.find(x=>x.id===id));}
+function deleteDebt(id){if(confirm("Supprimer cette dette ?")){data.debts=data.debts.filter(x=>x.id!==id);save();}}
+
+function editGoal(){
+  const value=prompt("Nouvel objectif d'épargne (€)",data.savingsGoal);
+  if(value!==null){data.savingsGoal=Math.max(0,Number(value)||0);save();}
+}
+function resetData(){
+  if(confirm("Réinitialiser toutes les données ? Cette action efface les données locales.")){
+    data=structuredClone(DEFAULT_DATA); save();
+  }
+}
+function printReport(){
+  document.body.classList.add("printing");
+  setTimeout(()=>window.print(),50);
+  setTimeout(()=>document.body.classList.remove("printing"),1000);
+}
+document.getElementById("monthPicker").value=new Date().toISOString().slice(0,7);
+renderAll();
+</script>
+</body>
+</html>
