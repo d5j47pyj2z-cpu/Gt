@@ -49,6 +49,11 @@
 
     <div class="grid-2">
       <article class="panel">
+        <div class="panel-head"><h2>Épargne enregistrée</h2><button class="icon-btn" onclick="openSavingsModal()">＋</button></div>
+        <div class="savings-total"><strong id="savedTotal">0 €</strong><span>total épargné</span></div>
+        <div id="savingsList" class="list"></div>
+      </article>
+      <article class="panel">
         <div class="panel-head"><h2>Objectif d'épargne</h2><span id="goalLabel">0 €</span></div>
         <div class="progress"><div id="goalProgress"></div></div>
         <div class="stats-line"><span>Objectif</span><strong id="goalValue">0 €</strong></div>
@@ -185,7 +190,7 @@ function renderDashboard(){
     card("Disponible réel",euro(av),"après tous les éléments",av<0?"danger":"good");
 
   const goal=Number(data.savingsGoal)||0;
-  const saved=Math.max(0,av);
+  const saved=data.savings.reduce((s,x)=>s+Number(x.amount||0),0);
   const pct=goal?Math.min(100,(saved/goal)*100):0;
   document.getElementById("goalLabel").textContent=euro(saved);
   document.getElementById("goalValue").textContent=euro(goal);
@@ -198,6 +203,10 @@ function renderDashboard(){
   if(data.debts.some(x=>Number(x.remaining)>0)) alerts.push(`<div class="alert">💳 ${data.debts.filter(x=>Number(x.remaining)>0).length} dette(s) en cours.</div>`);
   if(!alerts.length) alerts.push(`<div class="alert good">✓ Aucun signal critique détecté.</div>`);
   document.getElementById("alerts").innerHTML=alerts.join("");
+  document.getElementById("savedTotal").textContent=euro(saved);
+  document.getElementById("savingsList").innerHTML = data.savings.length ? data.savings.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>`
+    <div class="row"><div><strong>${esc(x.label||"Épargne")}</strong><small>${esc(x.date||"")} • ${euro(x.amount)}</small></div>
+    <div><button class="mini" onclick="editSavings(${x.id})">Modifier</button><button class="mini danger-btn" onclick="deleteSavings(${x.id})">Suppr.</button></div></div>`).join("") : `<div class="empty">Aucun versement enregistré. Ajoute ton premier versement avec ＋.</div>`;
 }
 function renderBudget(){
   document.getElementById("budgetCards").innerHTML =
@@ -321,6 +330,24 @@ function saveDebt(){
 }
 function editDebt(id){openDebtModal(data.debts.find(x=>x.id===id));}
 function deleteDebt(id){if(confirm("Supprimer cette dette ?")){data.debts=data.debts.filter(x=>x.id!==id);save();}}
+
+function openSavingsModal(item=null){
+  editing=item?.id||null;
+  const today=new Date().toISOString().slice(0,10);
+  modal(item?"Modifier le versement":"Ajouter un versement d'épargne",`<div class="form-grid">
+    ${formInput("Libellé","fLabel",item?.label||"Épargne")}
+    ${formInput("Montant (€)","fAmount",item?.amount||"","number",'step="0.01" min="0"')}
+    ${formInput("Date","fDate",item?.date||today,"date")}
+  </div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Annuler</button><button class="btn" onclick="saveSavings()">Enregistrer</button></div>`);
+}
+function saveSavings(){
+  const obj={id:editing||uid(),label:document.getElementById("fLabel").value.trim()||"Épargne",
+    amount:Number(document.getElementById("fAmount").value)||0,date:document.getElementById("fDate").value};
+  if(editing) data.savings=data.savings.map(x=>x.id===editing?obj:x); else data.savings.push(obj);
+  closeModal(); save();
+}
+function editSavings(id){openSavingsModal(data.savings.find(x=>x.id===id));}
+function deleteSavings(id){if(confirm("Supprimer ce versement d'épargne ?")){data.savings=data.savings.filter(x=>x.id!==id);save();}}
 
 function editGoal(){
   const value=prompt("Nouvel objectif d'épargne (€)",data.savingsGoal);

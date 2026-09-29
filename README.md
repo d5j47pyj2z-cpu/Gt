@@ -36,3 +36,6 @@ Clique sur **Imprimer / PDF**. Dans la fenêtre d'impression :
 Les données sont enregistrées localement dans le navigateur. Elles ne sont pas envoyées sur un serveur.
 
 Conseil : utilise régulièrement l'impression PDF comme sauvegarde papier/PDF de ton suivi.
+
+### Épargne manuelle
+Tu peux ajouter chaque versement d'épargne avec une date et un montant, puis modifier ou supprimer chaque entrée. Le total épargné et la progression vers l'objectif sont recalculés automatiquement.
